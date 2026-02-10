@@ -1,0 +1,152 @@
+<?php
+session_start();
+$conn = mysqli_connect("localhost","root","","company_system");
+
+$id = intval($_GET['id']);
+
+$invoice = mysqli_fetch_assoc(mysqli_query($conn,"
+SELECT 
+    e.*, 
+    u.full_name,
+    p.project_code,
+    p.project_type,
+    p.project_name
+FROM expenses e
+JOIN users u ON e.created_by = u.id
+JOIN projects p ON e.project_id = p.id
+WHERE e.id = $id
+AND (e.admin_approved = 1 OR e.admin_approved = 'Approved')
+AND (e.finance_approved = 1 OR e.finance_approved = 'Approved')
+"));
+
+$invoiceNumber = "INV-" . $invoice['id'] . "-" . $invoice['project_code'];
+
+if (!$invoice) die("Invoice not found");
+?>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Invoice INV-<?= $invoice['id'] ?></title>
+
+<style>
+body { font-family:Arial; background:#f4f4f4; }
+.invoice-box {
+    max-width:800px;
+    margin:30px auto;
+    background:#fff;
+    padding:30px;
+    border:2px solid #2f8f3f;
+}
+.header {
+    display:flex;
+    justify-content:space-between;
+    margin-bottom:20px;
+}
+.logo {
+    font-size:24px;
+    font-weight:bold;
+    color:#2f8f3f;
+}
+h2 { color:#2f8f3f; margin-bottom:15px; }
+table { width:100%; border-collapse:collapse; }
+td { padding:10px; border-bottom:1px solid #ddd; }
+.total { background:#e8f5e9; font-weight:bold; }
+button {
+    margin-top:20px;
+    padding:10px 20px;
+    background:#2f8f3f;
+    color:#fff;
+    border:none;
+    cursor:pointer;
+}
+.logo-img {
+    width:220px;
+}
+.top-header {
+    text-align:center;
+    margin-bottom:20px;
+}
+.project-type {
+    font-size:14px;
+    font-weight:bold;
+    color:#555;
+}
+.share-btn {
+    background:#007bff;
+    color:white;
+}
+.share-btn:hover {
+    background:#0056b3;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="invoice-box">
+
+<div class="header">
+<div class="top-header">
+    <img src="IMG_5436.PNG" class="logo-img" alt="Company Logo">
+    <div class="project-type">
+        <?= strtoupper($invoice['project_type']) ?> PROJECT
+    </div>
+</div>
+
+<div>
+Invoice #: <strong><?= $invoiceNumber ?></strong><br>
+Project ID: <strong><?= $invoice['project_code'] ?></strong><br>
+Project Name: <strong><?= $invoice['project_name'] ?></strong><br>
+Date: <?= date("Y-m-d") ?>
+</div>
+</div>
+
+<h2>Invoice</h2>
+
+<table>
+<tr><td>Expense Title</td><td><?= $invoice['expense_title'] ?></td></tr>
+<tr><td>Expense Type</td><td><?= $invoice['expense_type'] ?></td></tr>
+<tr><td>Created By</td><td><?= $invoice['full_name'] ?></td></tr>
+<tr class="total"><td>Total Amount</td><td>$<?= number_format($invoice['grand_total'],2) ?></td></tr>
+</table>
+
+<button onclick="window.print()">Print Invoice</button>
+
+<button class="share-btn" onclick="shareInvoice()">Share Invoice</button>
+
+
+</div>
+
+<script>
+function shareInvoice() {
+    const invoiceNumber = "<?= $invoiceNumber ?>";
+    const projectName = "<?= addslashes($invoice['project_name']) ?>";
+    const amount = "<?= number_format($invoice['grand_total'],2) ?>";
+    const url = window.location.href;
+
+    const shareText =
+        "Invoice: " + invoiceNumber + "\n" +
+        "Project: " + projectName + "\n" +
+        "Amount: $" + amount + "\n\n" +
+        "View Invoice:\n" + url;
+
+    // If browser supports native sharing (mobile & modern browsers)
+    if (navigator.share) {
+        navigator.share({
+            title: "Invoice " + invoiceNumber,
+            text: shareText,
+            url: url
+        }).catch(err => console.log("Share cancelled"));
+    } else {
+        // Fallback to email sharing
+        window.location.href =
+            "mailto:?subject=Invoice " + invoiceNumber +
+            "&body=" + encodeURIComponent(shareText);
+    }
+}
+</script>
+
+</body>
+</html>

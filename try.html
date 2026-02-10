@@ -1,0 +1,223 @@
+<?php
+session_start();
+if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'ProjectManager') {
+    header("Location: login.html");
+    exit;
+}
+
+include("db.php");
+include("project_summary.php");
+
+$user_id = $_SESSION['user_id'];
+
+// ---------- Fetch PM projects ----------
+$projects_res = $conn->query("
+    SELECT id, project_name, location, status
+    FROM projects
+    WHERE project_manager_id = $user_id
+");
+
+// Initialize counters
+$assigned_projects = 0;
+$ongoing_projects  = 0;
+$completed_projects= 0;
+$expenses_submitted= 0;
+
+$projects = [];
+while ($proj = $projects_res->fetch_assoc()) {
+    $projects[] = $proj;
+    $assigned_projects++;
+
+    if ($proj['status'] === 'Ongoing') $ongoing_projects++;
+    if ($proj['status'] === 'Completed') $completed_projects++;
+
+    // Count approved expenses for this project
+    $summary = getProjectSummary($conn, $proj['id']);
+    $expenses_submitted += ($summary['total_spent'] > 0) ? 1 : 0;
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Manager Dashboard</title>
+
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+<style>
+*{ margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif;}
+body { background-color: #f4f4f4; }
+
+/* Top Bar */
+.topbar {
+    background-color: #2f8f3f;
+    color: white;
+    padding: 15px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+}
+.topbar h2 { font-size: 20px; }
+.logout {
+    background-color: white;
+    color: #2f8f3f;
+    padding: 8px 15px;
+    border-radius: 5px;
+    text-decoration: none;
+    font-weight: bold;
+}
+.logout i { margin-right: 5px; }
+
+/* Layout */
+.container { display: flex; }
+
+/* Sidebar */
+.sidebar {
+    width: 200px;
+    background-color: #256d31;
+    min-height: 100vh;
+    padding-top: 60px;
+    position: fixed;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+}
+.sidebar a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 15px 20px;
+    color: white;
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 400;
+}
+.sidebar a:hover { background-color: #2f8f3f; }
+
+/* Main Content */
+.main {
+    flex: 1;
+    margin-left: 220px;
+    padding: 30px;
+}
+.main h3 { margin-bottom: 20px; color: #333; }
+
+/* Cards */
+.cards{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:20px;
+    margin-bottom:30px;
+}
+.card{
+    background:#fff;
+    padding:20px;
+    border-radius:8px;
+    box-shadow:0 2px 8px rgba(0,0,0,.1);
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.card i{
+    font-size: 30px;
+    color: #2f8f3f;
+}
+.card h4{color:#2f8f3f;margin-bottom:5px}
+.card p{font-size:22px;font-weight:bold;margin:0}
+
+/* Table */
+table{
+    width:100%;
+    background:#fff;
+    border-collapse:collapse;
+    box-shadow:0 2px 8px rgba(0,0,0,.1);
+}
+th,td{
+    padding:12px;
+    border-bottom:1px solid #ddd;
+    text-align:left;
+}
+th{background:#2f8f3f;color:#fff}
+</style>
+</head>
+
+<body>
+
+<div class="topbar">
+    <h2><i class="fas fa-tachometer-alt"></i> Project Manager Dashboard</h2>
+    <a href="logout.php" class="logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+</div>
+
+<div class="container">
+
+    <div class="sidebar">
+        <a href="project_manager_dashboard.php"><i class="fas fa-home"></i> Home</a>
+        <a href="my_project.php"><i class="fas fa-folder-open"></i> Projects</a>
+        <a href="pm_expenses.php"><i class="fas fa-file-invoice-dollar"></i> Expenses</a>
+        <a href="pm_invoices.php"><i class="fas fa-file-invoice"></i> Invoices</a>
+        <a href="pm_settings.php"><i class="fas fa-cog"></i> Settings</a>
+    </div>
+
+    <div class="main">
+        <h2>Overview</h2>
+
+        <div class="cards">
+            <div class="card">
+                <i class="fas fa-clipboard-list"></i>
+                <div>
+                    <h4>Assigned Projects</h4>
+                    <p><?= $assigned_projects ?></p>
+                </div>
+            </div>
+            <div class="card">
+                <i class="fas fa-spinner"></i>
+                <div>
+                    <h4>Ongoing Projects</h4>
+                    <p><?= $ongoing_projects ?></p>
+                </div>
+            </div>
+            <div class="card">
+                <i class="fas fa-check-circle"></i>
+                <div>
+                    <h4>Completed Projects</h4>
+                    <p><?= $completed_projects ?></p>
+                </div>
+            </div>
+            <div class="card">
+                <i class="fas fa-dollar-sign"></i>
+                <div>
+                    <h4>Expenses Submitted</h4>
+                    <p><?= $expenses_submitted ?></p>
+                </div>
+            </div>
+        </div>
+
+        <h3>My Projects</h3>
+        <table>
+            <tr>
+                <th>Project</th>
+                <th>Location</th>
+                <th>Status</th>
+            </tr>
+            <?php foreach($projects as $p): ?>
+            <tr>
+                <td><?= htmlspecialchars($p['project_name']) ?></td>
+                <td><?= htmlspecialchars($p['location']) ?></td>
+                <td><?= htmlspecialchars($p['status']) ?></td>
+            </tr>
+            <?php endforeach; ?>
+        </table>
+    </div>
+
+</div>
+
+</body>
+</html>
